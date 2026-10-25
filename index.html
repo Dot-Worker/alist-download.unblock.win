@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; base-uri 'none'; object-src 'none'; form-action 'none'; frame-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="在浏览器中连接 Alist，递归选择文件夹，将文件保存为 ZIP 或直接下载到本地。纯静态，无中转。">
@@ -85,6 +86,7 @@
         <label id="directory-method" class="method-card"><input type="radio" name="downloadMode" value="directory"><span class="method-icon"><svg class="icon"><use href="#i-folder"/></svg></span><span class="method-content"><strong>直接存入文件夹 <span class="method-tag">推荐</span></strong><span id="directory-description">选择本地目录，逐个文件直接写入。</span></span><span class="radio-indicator"></span></label>
         <label class="method-card"><input type="radio" name="downloadMode" value="browser"><span class="method-icon"><svg class="icon"><use href="#i-download"/></svg></span><span class="method-content"><strong>浏览器逐个下载</strong><span>交给浏览器处理；可能需要允许多文件下载。</span></span><span class="radio-indicator"></span></label>
       </fieldset>
+      <label id="memory-zip-option" class="memory-zip-option" hidden><input id="memory-zip" type="checkbox"><span><strong>内存 ZIP（256 MiB 内）</strong><span>兼容模式：不使用保存位置选择器，打包后交给浏览器下载。</span></span></label>
       <div class="download-action"><div id="mode-note" class="mode-note"><svg class="icon"><use href="#i-info"/></svg><p id="mode-note-text"></p></div><button id="review-download" type="button" class="button primary" disabled><svg class="icon"><use href="#i-download"/></svg><span>确认并下载</span></button></div>
     </section>
 

@@ -1,6 +1,7 @@
 /* Independent release-gate tests. No live AList instance, secrets, or external downloads. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { AlistClient, EngineError, TaskControl, normalizeBaseUrl, scanTree } from '../src/core.js';
 import { allocatePaths, safeName, downloadDirectory, downloadZip, downloadBrowser, MEMORY_ZIP_LIMIT } from '../src/downloads.js';
 
@@ -8,6 +9,35 @@ const encode = value => new TextEncoder().encode(value);
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const oneFile = { path: '/file.txt', relativePath: 'file.txt', name: 'file.txt', size: 5 };
 const client = { baseUrl: 'https://source.example', async get() { return { raw_url: 'https://files.example/test.txt?signature=synthetic' }; } };
+
+test('audit: early enforced CSP blocks remote and inline scripts without blocking HTTPS file APIs', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const matches = [...html.matchAll(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"\s*>/gi)];
+  assert.equal(matches.length, 1, 'Exactly one enforced CSP meta is required');
+  const [meta] = matches;
+  assert.ok(meta.index > html.indexOf('<head>'));
+  assert.ok(meta.index < html.search(/<(?:script|link|style|base)\b/i), 'CSP must precede every active resource');
+  const directives = new Map(meta[1].split(';').map(value => value.trim().split(/\s+/)).map(([name, ...values]) => [name, values]));
+  assert.deepEqual(directives.get('default-src'), ["'none'"]);
+  assert.deepEqual(directives.get('script-src'), ["'self'"]);
+  assert.deepEqual(directives.get('script-src-attr'), ["'none'"]);
+  assert.equal(directives.has('script-src-elem'), false, 'No weaker element override');
+  assert.deepEqual(directives.get('connect-src'), ["'self'", 'https:', 'http://localhost:*', 'http://127.0.0.1:*']);
+  assert.deepEqual(directives.get('style-src'), ["'self'", "'unsafe-inline'"]);
+  assert.deepEqual(directives.get('img-src'), ["'self'", 'data:', 'blob:']);
+  assert.deepEqual(directives.get('worker-src'), ["'self'", 'blob:']);
+  for (const directive of ['base-uri', 'object-src', 'form-action', 'frame-src']) assert.deepEqual(directives.get(directive), ["'none'"]);
+  assert.doesNotMatch(meta[1], /unsafe-eval|wasm-unsafe-eval|report-uri|report-to|cloudflareinsights/i);
+  assert.equal(directives.has('sandbox'), false, 'File pickers and anchor downloads must not be sandboxed');
+});
+
+test('audit: vendored ZIP runtime needs no eval permission or remote worker scripts', () => {
+  const vendor = readFileSync(new URL('../vendor/zip.min.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(vendor, /\beval\s*\(|\bFunction\s*\(|\bWebAssembly\b|\bimportScripts\s*\(/);
+  const downloads = readFileSync(new URL('../src/downloads.js', import.meta.url), 'utf8');
+  assert.match(downloads, /new globalThis\.zip\.ZipWriter\([^;]+useWebWorkers:\s*false/);
+  assert.match(downloads, /zipWriter\.add\([^;]+useWebWorkers:\s*false/);
+});
 
 class MemoryFile {
   constructor(original = new Uint8Array()) { this.bytes = original; this.aborted = false; this.closed = false; }

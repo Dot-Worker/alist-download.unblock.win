@@ -154,3 +154,31 @@ test('BFCache invalidates old picker and old transfer results', async () => {
   let releaseTransfer;
   const t = harness({ zip: () => new Promise(resolve => { releaseTransfer = resolve; }) }); await t.connectNow(); const transfer = t.runDownload(t.state.manifest.files, 'zip', {}); await t.window.emit('pagehide', { persisted: true }); await t.window.emit('pageshow', { persisted: true }); await t.loadDemo(); releaseTransfer({ completed: 2, failed: 0, skipped: 0, initiated: 0, errors: [] }); await transfer; assert.equal(t.state.demo, true); assert.equal(t.$('transfer-section').hidden, true);
 });
+
+test('explicit memory ZIP works when save picker exists, with a separately confirmed snapshot', async () => {
+  let pickerCalls = 0; const h = harness({ savePicker: async () => { pickerCalls++; throw new DOMException('denied', 'NotAllowedError'); } });
+  await h.connectNow(); await h.$('select-all-files').emit('click'); assert.equal(h.$('memory-zip-option').hidden, false); assert.equal(h.$('memory-zip').checked, false);
+  h.$('memory-zip').checked = true; await h.$('memory-zip').emit('change'); h.openReview(); assert.equal(h.state.reviewMemory, true); assert.equal(h.$('review-mode').textContent, '内存 ZIP'); assert.match(h.$('review-note').textContent, /256/); assert.equal(h.downloads.length, 0);
+  // Simulates unrelated underlying state changes: confirmation snapshot must prevail.
+  h.$('memory-zip').checked = false; await h.startDownload(); assert.equal(pickerCalls, 0); assert.equal(h.downloads.length, 1); assert.equal(h.downloads[0].settings.fileHandle, null); assert.equal(h.$('transfer-heading').textContent, 'ZIP 已交给浏览器');
+});
+test('picker cancellation or refusal never enables or auto-starts memory fallback', async () => {
+  for (const name of ['AbortError', 'NotAllowedError']) {
+    const h = harness({ savePicker: async () => { throw new DOMException('picker stopped', name); } }); await h.connectNow(); await h.$('select-all-files').emit('click'); h.openReview(); await h.startDownload();
+    assert.equal(h.downloads.length, 0); assert.equal(h.$('memory-zip').checked, false); assert.equal(h.state.reviewMemory, false); assert.equal(h.$('review-dialog').open, true);
+  }
+});
+test('memory mode enforces unknown/size/count bounds at review and again at start', async () => {
+  for (const size of [null, MEMORY_ZIP_LIMIT + 1]) {
+    const h = harness({ savePicker: async () => assert.fail('No picker expected'), fixture: { '/': [file('oversize.bin', size)] } }); await h.connectNow(); h.$('memory-zip').checked = true; await h.$('select-all-files').emit('click'); h.openReview(); assert.equal(h.$('start-download').disabled, true); await h.startDownload(); assert.equal(h.downloads.length, 0);
+  }
+  const h = harness({ savePicker: async () => assert.fail('No picker expected') }); await h.connectNow(); h.$('memory-zip').checked = true; h.openReview(Array.from({ length: MEMORY_ZIP_MAX_FILES + 1 }, (_, i) => ({ path: `/f${i}`, relativePath: `f${i}`, name: `f${i}`, size: 0 }))); assert.equal(h.$('start-download').disabled, true); await h.startDownload(); assert.equal(h.downloads.length, 0);
+});
+test('memory ZIP retry retains the explicitly confirmed destination mode', async () => {
+  let pickerCalls = 0; const h = harness({ savePicker: async () => { pickerCalls++; return {}; }, zip: async () => { throw new core.EngineError('INVALID_RESPONSE', 'synthetic ZIP failure'); } });
+  await h.connectNow(); h.$('memory-zip').checked = true; await h.$('select-all-files').emit('click'); h.openReview(); await h.startDownload(); assert.equal(h.state.lastMemory, true); h.$('memory-zip').checked = false;
+  await h.$('retry-transfer').emit('click'); assert.equal(h.state.reviewMemory, true); assert.equal(h.$('review-mode').textContent, '内存 ZIP'); await h.startDownload(); assert.equal(pickerCalls, 0); assert.equal(h.downloads.length, 2);
+});
+test('memory option stays locked during picker and transfer operations', async () => {
+  let resolvePicker; const h = harness({ savePicker: () => new Promise(resolve => { resolvePicker = resolve; }) }); await h.connectNow(); await h.$('select-all-files').emit('click'); h.openReview(); const pending = h.startDownload(); assert.equal(h.$('memory-zip').disabled, true); resolvePicker({}); await pending; assert.equal(h.$('memory-zip').disabled, false);
+});

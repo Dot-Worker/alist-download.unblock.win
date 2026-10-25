@@ -46,6 +46,8 @@ Ask the instance administrator to allow **only the intended origin** `https://al
 
 Publish this `app/` directory's contents as the repository root or Pages artifact. Set the Pages custom domain to `alist-download.unblock.win`, retain the matching `CNAME` file, and enable HTTPS once GitHub issues its certificate. User configuration is never embedded in deployment files. This README is deployment guidance, not a claim that DNS, Pages, or the certificate has been verified.
 
+The early HTML Content Security Policy allows only same-origin application scripts, blocking external analytics scripts injected **after** the policy by a hosting layer. It does not remove injected HTML or independently prove that the deployed page makes no third-party requests; verify the actual deployed page in a browser. HTTPS API/file connections remain allowed. Local HTTP connections are restricted to `localhost` and `127.0.0.1` (plus the page's own origin); use `localhost` rather than an IPv6 literal such as `[::1]`, because CSP host-source syntax does not portably support IPv6 literals. This policy does not bypass CORS, mixed-content rules, or browser local-network permissions.
+
 ## License and attribution
 
 This independent web implementation is inspired by [wangzhenjjcn/AlistDownloader](https://github.com/wangzhenjjcn/AlistDownloader), inspected at commit `179556ac7723859223970efba7dd5a413e7b2fee`. It is distributed under **GPL-3.0-or-later**; see `LICENSE`. The original Python application is not bundled or executed. AList/OpenList protocols were implemented from their public API documentation.

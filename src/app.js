@@ -7,11 +7,13 @@ const PAGE_SIZE = 80;
 const capabilities = capabilityInfo();
 const canDirectory = capabilities.secureContext && capabilities.directoryPicker;
 const canSaveZip = capabilities.secureContext && capabilities.savePicker;
+const useMemoryZip = () => !canSaveZip || $('memory-zip').checked;
+const memoryZipAllowed = files => files.length <= MEMORY_ZIP_MAX_FILES && files.every(file => file.size != null) && files.reduce((sum, file) => sum + file.size, 0) <= MEMORY_ZIP_LIMIT;
 const state = {
   generation: 0, demo: false, demoFetch: null, client: null, manifest: null, selected: new Set(), directories: new Map(), files: new Map(),
   currentPath: '', query: '', filter: 'all', page: 1, sortAscending: true,
   scanning: false, scanControl: null, downloading: false, picking: false, control: null,
-  reviewFiles: [], reviewMode: 'zip', lastFiles: [], lastMode: 'zip', retryFiles: [],
+  reviewFiles: [], reviewMode: 'zip', reviewMemory: false, lastFiles: [], lastMode: 'zip', lastMemory: false, retryFiles: [],
   statuses: new Map(), loaded: 0, activePath: '', activeTotal: 0,
 };
 const extensions = {
@@ -72,6 +74,7 @@ function setBusy() {
   $('disconnect-button').disabled = locked;
   $('disconnect-button').textContent = state.demo ? '退出本地演示' : '断开连接并清除凭据';
   $('download-methods').disabled = locked;
+  $('memory-zip').disabled = locked;
   $('file-search').disabled = locked; $('file-filter').disabled = locked;
   $('select-all-files').disabled = locked || !state.manifest?.files.length;
   $('clear-selection').disabled = locked || !state.selected.size;
@@ -85,13 +88,13 @@ function setBusy() {
   $('step-select').className = `step ${state.manifest && !state.downloading ? 'active' : state.downloading ? 'done' : ''}`;
   $('step-save').className = `step ${state.downloading ? 'active' : ''}`;
 }
-function modeNote(selectedMode, files = selectedFiles()) {
+function modeNote(selectedMode, files = selectedFiles(), memory = useMemoryZip()) {
   if (state.demo && selectedMode === 'browser') return '本地演示没有远程下载链接。请选择 ZIP 或本地文件夹体验；演示不会访问外部服务。';
   const info = totals(files);
   if (selectedMode === 'directory') return '将先询问本地保存目录；保留目录结构，遇到同名文件自动重命名，不默认覆盖。需要支持 File System Access API 的浏览器与安全环境。';
   if (selectedMode === 'browser') return '仅逐个提交下载请求，无法确认是否保存成功。浏览器可能拦截多文件下载、打开预览或新标签页；此模式不保留目录结构，请查看浏览器下载列表。';
-  if (canSaveZip) return '将先询问 ZIP 保存位置，再流式写入磁盘。目录结构会保留；若打包失败，整个归档不会标记为完成。';
-  return `当前浏览器使用内存 ZIP：最多 ${formatBytes(MEMORY_ZIP_LIMIT)}、${number(MEMORY_ZIP_MAX_FILES)} 个已知大小文件。${info.unknown ? '当前选择包含未知大小文件，无法使用此模式。' : '大目录请改用支持文件夹保存的桌面浏览器。'}`;
+  if (!memory) return '将先询问 ZIP 保存位置，再流式写入磁盘。目录结构会保留；若打包失败，整个归档不会标记为完成。';
+  return `内存 ZIP：最多 ${formatBytes(MEMORY_ZIP_LIMIT)}、${number(MEMORY_ZIP_MAX_FILES)} 个已知大小文件。${info.unknown ? '当前选择包含未知大小文件，无法使用此模式。' : '大目录请改用支持文件夹保存的桌面浏览器。'}`;
 }
 function renderCapabilities() {
   const input = document.querySelector('input[name="downloadMode"][value="directory"]');
@@ -101,8 +104,9 @@ function renderCapabilities() {
   if (state.demo && browserInput.checked) document.querySelector('input[name="downloadMode"][value="zip"]').checked = true;
   $('directory-method').title = canDirectory ? '' : '当前浏览器或环境不支持直接选择本地文件夹';
   $('directory-description').textContent = canDirectory ? '选择本地目录，逐个文件直接写入。' : '当前环境不支持，请选择 ZIP 或浏览器下载。';
-  $('zip-description').textContent = canSaveZip ? '直接写入磁盘，保留目录结构。' : '内存打包，保留目录结构，限 256 MiB。';
-  $('secure-status').textContent = canDirectory ? '文件夹直存可用' : capabilities.secureContext ? 'ZIP / 浏览器下载可用' : '非安全环境 · 文件夹直存不可用';
+  $('memory-zip-option').hidden = !canSaveZip || mode() !== 'zip';
+  $('zip-description').textContent = !useMemoryZip() ? '直接写入磁盘，保留目录结构。' : '内存打包，保留目录结构，限 256 MiB。';
+  $('secure-status').textContent = canDirectory ? '文件夹选择 API 可用' : capabilities.secureContext ? 'ZIP / 浏览器下载可用' : '非安全环境 · 文件夹直存不可用';
   $('mode-note-text').textContent = modeNote(mode());
 }
 function buildIndex(manifest) {
@@ -249,18 +253,18 @@ function archiveName() {
   const folder = state.manifest?.rootPath.split('/').filter(Boolean).at(-1) || 'alist-download';
   return `${folder.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100)}.zip`;
 }
-function openReview(files = selectedFiles(), selectedMode = mode()) {
+function openReview(files = selectedFiles(), selectedMode = mode(), memory = useMemoryZip()) {
   if (busy() || !files.length || !state.client || (state.demo && selectedMode === 'browser')) return;
-  state.reviewFiles = [...files]; state.reviewMode = selectedMode;
+  state.reviewFiles = [...files]; state.reviewMode = selectedMode; state.reviewMemory = selectedMode === 'zip' && memory;
   const info = totals(files);
-  $('review-count').textContent = number(info.count); $('review-size').textContent = formatBytes(info.bytes) + (info.unknown ? '+' : ''); $('review-mode').textContent = selectedMode === 'zip' ? 'ZIP' : selectedMode === 'directory' ? '文件夹' : '浏览器';
+  $('review-count').textContent = number(info.count); $('review-size').textContent = formatBytes(info.bytes) + (info.unknown ? '+' : ''); $('review-mode').textContent = selectedMode === 'zip' ? state.reviewMemory ? '内存 ZIP' : 'ZIP' : selectedMode === 'directory' ? '文件夹' : '浏览器';
   $('review-origin').textContent = state.demo ? '内置演示文件 · 无外部连接' : `${new URL(state.client.baseUrl).hostname} · ${state.manifest.rootPath}`;
   const items = files.slice(0, 8).map(file => { const li = element('li'); li.append(element('span', '', file.relativePath), element('span', '', formatBytes(file.size))); return li; }); $('review-file-list').replaceChildren(...items);
   $('review-more').textContent = files.length > 8 ? `另有 ${number(files.length - 8)} 个文件，共 ${number(files.length)} 个。取消可返回工作区核对完整选择。` : '以上是本次下载的全部文件。';
-  $('review-note').textContent = modeNote(selectedMode, files);
-  $('start-download').querySelector('span').textContent = selectedMode === 'directory' ? '选择文件夹并开始' : selectedMode === 'zip' && canSaveZip ? '选择 ZIP 位置并开始' : selectedMode === 'browser' ? '提交浏览器下载' : '开始打包 ZIP';
+  $('review-note').textContent = modeNote(selectedMode, files, state.reviewMemory);
+  $('start-download').querySelector('span').textContent = selectedMode === 'directory' ? '选择文件夹并开始' : selectedMode === 'zip' && !state.reviewMemory ? '选择 ZIP 位置并开始' : selectedMode === 'browser' ? '提交浏览器下载' : '开始内存 ZIP';
   $('review-error').hidden = true; $('start-download').disabled = false;
-  if (selectedMode === 'zip' && !canSaveZip && (info.unknown || info.bytes > MEMORY_ZIP_LIMIT || info.count > MEMORY_ZIP_MAX_FILES)) { $('review-error').textContent = '当前选择超过内存 ZIP 能力，或包含未知大小文件。请减少选择或改用支持直接写入磁盘的浏览器。'; $('review-error').hidden = false; $('start-download').disabled = true; }
+  if (selectedMode === 'zip' && state.reviewMemory && !memoryZipAllowed(files)) { $('review-error').textContent = '当前选择超过内存 ZIP 能力，或包含未知大小文件。请减少选择或改用支持直接写入磁盘的浏览器。'; $('review-error').hidden = false; $('start-download').disabled = true; }
   $('review-dialog').showModal();
 }
 function closeReview() { if (state.picking) return; $('review-dialog').close(); state.reviewFiles = []; }
@@ -269,7 +273,8 @@ function setPicking(value) {
 }
 async function startDownload() {
   if (busy() || !state.reviewFiles.length || !state.client) return;
-  const files = [...state.reviewFiles]; const selectedMode = state.reviewMode; const generation = ++state.generation;
+  const files = [...state.reviewFiles]; const selectedMode = state.reviewMode; const memory = state.reviewMemory; const generation = ++state.generation;
+  if (selectedMode === 'zip' && memory && !memoryZipAllowed(files)) { $('review-error').textContent = '内存 ZIP 仅支持 256 MiB 内、10,000 个已知大小文件。请返回减少选择。'; $('review-error').hidden = false; $('start-download').disabled = true; return; }
   setPicking(true); $('review-error').hidden = true;
   let directoryHandle = null, fileHandle = null;
   try {
@@ -277,7 +282,7 @@ async function startDownload() {
     if (selectedMode === 'directory') {
       if (!canDirectory) throw new EngineError('UNSUPPORTED', '当前环境不支持本地文件夹选择器。');
       directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'alist-download-directory' });
-    } else if (selectedMode === 'zip' && canSaveZip) {
+    } else if (selectedMode === 'zip' && !memory) {
       fileHandle = await window.showSaveFilePicker({ suggestedName: archiveName(), types: [{ description: 'ZIP 压缩包', accept: { 'application/zip': ['.zip'] } }], id: 'alist-download-zip' });
     }
   } catch (error) {
@@ -310,7 +315,7 @@ function showErrors(errors) {
 }
 async function runDownload(files, selectedMode, handles) {
   const generation = ++state.generation;
-  state.downloading = true; state.control = new TaskControl(); state.lastFiles = files; state.lastMode = selectedMode; state.activeTotal = files.length; state.retryFiles = []; state.statuses.clear(); state.loaded = 0; state.activePath = '';
+  state.downloading = true; state.control = new TaskControl(); state.lastFiles = files; state.lastMode = selectedMode; state.lastMemory = selectedMode === 'zip' && !handles.fileHandle; state.activeTotal = files.length; state.retryFiles = []; state.statuses.clear(); state.loaded = 0; state.activePath = '';
   $('transfer-section').hidden = false; $('transfer-heading').textContent = selectedMode === 'zip' ? '正在准备 ZIP' : selectedMode === 'browser' ? '正在提交浏览器下载' : '正在保存文件';
   $('transfer-badge').textContent = '进行中'; $('transfer-badge').className = 'badge connected'; $('transfer-message').textContent = selectedMode === 'browser' ? '页面只能确认下载请求已提交，无法验证最终保存结果。' : '请保持此页面打开。暂停与重试仅在当前页面有效。';
   $('pause-transfer').hidden = false; $('pause-transfer').disabled = false; $('pause-transfer').querySelector('span').textContent = '暂停'; $('pause-transfer').querySelector('use').setAttribute('href', '#i-pause'); $('cancel-transfer').hidden = false; $('cancel-transfer').disabled = false; $('retry-transfer').hidden = true; showErrors([]);
@@ -401,6 +406,7 @@ $('demo-button').addEventListener('click', loadDemo);
 $('connection-form').addEventListener('submit', connect);
 for (const input of document.querySelectorAll('input[name="authMode"]')) input.addEventListener('change', renderAuth);
 for (const input of document.querySelectorAll('input[name="downloadMode"]')) input.addEventListener('change', renderCapabilities);
+$('memory-zip').addEventListener('change', renderCapabilities);
 $('cancel-scan-button').addEventListener('click', () => { state.scanControl?.cancel(); $('cancel-scan-button').disabled = true; $('scan-detail').textContent = '正在停止读取…'; });
 $('disconnect-button').addEventListener('click', disconnect);
 $('dismiss-notice').addEventListener('click', () => notice(''));
@@ -422,7 +428,7 @@ $('pause-transfer').addEventListener('click', () => {
   else { state.control.pause(); $('pause-transfer').querySelector('span').textContent = '继续'; $('pause-transfer').querySelector('use').setAttribute('href', '#i-play'); $('transfer-badge').textContent = '已请求暂停'; $('transfer-badge').className = 'badge warning'; $('transfer-message').textContent = '将在下一次数据读取或文件操作检查点暂停。当前页面保持打开，点击继续即可恢复。'; }
 });
 $('cancel-transfer').addEventListener('click', () => { state.control?.cancel(); $('cancel-transfer').disabled = true; $('pause-transfer').disabled = true; $('transfer-message').textContent = '正在取消并清理未完成的写入…'; });
-$('retry-transfer').addEventListener('click', () => openReview(state.retryFiles, state.lastMode));
+$('retry-transfer').addEventListener('click', () => openReview(state.retryFiles, state.lastMode, state.lastMemory));
 window.addEventListener('beforeunload', event => { if (state.scanning || state.downloading || state.picking) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('pagehide', event => {
   // Clear secrets even when a browser keeps this page in its back/forward cache.
