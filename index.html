@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="在浏览器中连接 Alist，递归选择文件夹，将文件保存为 ZIP 或直接下载到本地。纯静态，无中转。">
+  <meta name="color-scheme" content="light">
+  <title>Alist Download · 把文件带回本地</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5h6l2 3h10v12H3V7Z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5M8 13h8M8 17h5"/></symbol>
+    <symbol id="i-zip" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5M10 3v3m0 3v3m0 3v3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 4-5 8-8 9-3-1-8-5-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M6 18a5 5 0 0 1-1-10 7 7 0 0 1 13-1 5.5 5.5 0 0 1 0 11M12 11v10m-4-4 4 4 4-4"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8V4Z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 7a8 8 0 0 1 14 0M19 17a8 8 0 0 1-14 0"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-6 7-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 1 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0" transform="translate(1 0)"/></symbol>
+  </defs></svg>
+  <a class="skip-link" href="#workspace">跳到文件工作区</a>
+  <header class="site-header">
+    <a class="wordmark" href="./" aria-label="Alist Download 首页"><span class="brand-symbol"><svg class="icon"><use href="#i-download"/></svg></span><span>alist<span class="wordmark-light">download</span><span class="brand-dot">.</span></span></a>
+    <div class="header-right"><span class="local-badge"><span class="status-dot"></span>纯浏览器运行</span><a class="help-link" href="#how-it-works">使用说明 <span aria-hidden="true">↗</span></a></div>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div><p class="eyebrow">YOUR FILES. YOUR WAY.</p><h1 id="page-title">把文件<span class="title-accent">带回本地</span><span class="title-period">。</span></h1><p class="intro-copy">连接你的 Alist，选好文件，剩下的交给浏览器。<br class="mobile-break">一个文件夹，或整个目录，都井井有条。</p></div>
+      <div class="privacy-note"><svg class="icon"><use href="#i-shield"/></svg><div><strong>从你的网盘，直接到你的设备</strong><span>无中转服务器 · 凭据仅保留在当前页面内存</span></div></div>
+    </section>
+    <nav class="steps" aria-label="下载步骤"><div id="step-connect" class="step active"><span class="step-number">01</span><span>连接 Alist</span></div><span class="step-rule"></span><div id="step-select" class="step"><span class="step-number">02</span><span>挑选文件</span></div><span class="step-rule"></span><div id="step-save" class="step"><span class="step-number">03</span><span>保存到本地</span></div></nav>
+
+    <div class="workspace" id="workspace">
+      <aside class="connection-panel panel" aria-labelledby="connection-heading">
+        <div class="panel-heading"><div><p class="section-kicker">CONNECTION</p><h2 id="connection-heading">先连接，再出发</h2></div><span id="connection-badge" class="badge">未连接</span></div>
+        <form id="connection-form" autocomplete="off">
+          <fieldset id="connection-fields">
+            <label class="field-label" for="base-url">Alist 地址 <span class="required">*</span></label><input id="base-url" name="baseUrl" type="url" inputmode="url" placeholder="https://alist.example.com" required autocomplete="off" spellcheck="false"><p class="field-help">填写站点地址，含子路径也可以，不是文件直链。</p>
+            <label class="field-label" for="root-path">起始目录</label><div class="input-icon"><svg class="icon"><use href="#i-folder"/></svg><input id="root-path" name="rootPath" value="/" placeholder="/" autocomplete="off" spellcheck="false"></div>
+            <div class="field-label auth-label">访问方式</div><div class="segmented" role="group" aria-label="访问方式"><label><input type="radio" name="authMode" value="guest" checked><span>公开访问</span></label><label><input type="radio" name="authMode" value="token"><span>Token</span></label><label><input type="radio" name="authMode" value="login"><span>账号登录</span></label></div>
+            <div id="token-fields" class="auth-fields" hidden><label class="field-label" for="api-token">访问 Token</label><input id="api-token" type="password" placeholder="粘贴 Alist Token" autocomplete="off" spellcheck="false"><p class="field-help">只发送到上方填写的 Alist 地址。</p></div>
+            <div id="login-fields" class="auth-fields" hidden><label class="field-label" for="username">用户名</label><input id="username" autocomplete="off" placeholder="Alist 用户名"><label class="field-label" for="login-password">登录密码</label><input id="login-password" type="password" autocomplete="new-password" placeholder="Alist 登录密码"><label class="field-label" for="otp">两步验证码 <span class="optional">可选</span></label><input id="otp" inputmode="numeric" autocomplete="off" placeholder="启用两步验证时填写"></div>
+            <details class="advanced"><summary>目录密码 <span>可选</span></summary><label class="sr-only" for="directory-password">目录访问密码</label><input id="directory-password" type="password" autocomplete="new-password" placeholder="受保护目录的访问密码"><p class="field-help">目录密码与账号登录密码不同。</p></details>
+          </fieldset>
+          <button type="submit" id="connect-button" class="button primary connect-button"><span>连接并读取文件</span><svg class="icon"><use href="#i-arrow"/></svg></button>
+          <button type="button" id="cancel-scan-button" class="button subtle full-width" hidden>停止读取</button>
+          <button type="button" id="demo-button" class="text-button demo-button">先体验本地演示 <span aria-hidden="true">↗</span></button>
+          <button type="button" id="disconnect-button" class="text-button disconnect" hidden>断开连接并清除凭据</button>
+        </form>
+        <div class="connection-footnote"><svg class="icon"><use href="#i-info"/></svg><p>Alist API 和文件源均需允许跨域（CORS）。本工具不会绕过权限，也不提供代理。</p></div>
+      </aside>
+
+      <section class="files-panel panel" aria-labelledby="files-heading">
+        <div class="panel-heading files-heading"><div><p class="section-kicker">YOUR FILES</p><h2 id="files-heading">文件工作区</h2></div><span id="manifest-count" class="muted small">等待连接</span></div>
+        <div id="notice" class="notice" role="status" hidden><svg class="icon"><use href="#i-info"/></svg><div id="notice-text"></div><button type="button" id="dismiss-notice" class="icon-button" aria-label="关闭提示"><svg class="icon"><use href="#i-close"/></svg></button></div>
+        <div id="scan-status" class="scan-status" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><strong>正在递归读取目录…</strong><p id="scan-detail">正在连接 Alist</p></div></div>
+        <div id="empty-state" class="empty-state"><div class="empty-illustration" aria-hidden="true"><div class="illustration-grid"></div><div class="illustration-file file-back"><svg class="icon"><use href="#i-file"/></svg></div><div class="illustration-folder"><svg class="icon"><use href="#i-folder"/></svg></div><span class="illustration-arrow"><svg class="icon"><use href="#i-download"/></svg></span><span class="illustration-dot dot-one"></span><span class="illustration-dot dot-two"></span></div><h3>你的文件，即将整装待发</h3><p>从左侧连接 Alist 后，目录会出现在这里。<br>支持递归读取，保留原有文件夹结构。</p><div class="empty-tags"><span>文件多选</span><span>文件夹递归</span><span>结构保留</span></div></div>
+        <div id="file-explorer" hidden>
+          <div class="explorer-toolbar"><div class="search-field"><svg class="icon"><use href="#i-search"/></svg><label class="sr-only" for="file-search">搜索文件或目录</label><input id="file-search" type="search" placeholder="搜索文件名或路径…" autocomplete="off"></div><label class="sr-only" for="file-filter">筛选文件</label><select id="file-filter"><option value="all">全部文件</option><option value="selected">仅看已选</option><option value="images">图片</option><option value="videos">视频</option><option value="documents">文档</option><option value="archives">压缩包</option></select></div>
+          <div class="path-bar"><nav id="breadcrumbs" aria-label="当前目录"></nav><button type="button" id="select-all-files" class="text-button">选择全部文件</button></div>
+          <div class="file-table-wrap"><table class="file-table"><thead><tr><th class="select-cell"><input id="select-visible" type="checkbox" aria-label="选择当前列表全部文件和目录"></th><th scope="col"><button id="sort-name" type="button" class="sort-button">名称 <span aria-hidden="true">↑</span></button></th><th scope="col" class="size-cell">大小</th><th scope="col" class="type-cell">类型</th></tr></thead><tbody id="file-rows"></tbody></table><div id="no-results" class="no-results" hidden><svg class="icon"><use href="#i-search"/></svg><h3>这里暂时没有文件</h3><p>试试调整筛选，或返回上一级目录。</p></div></div>
+          <div class="list-footer"><span id="list-count" class="muted small"></span><div class="pagination"><button id="previous-page" type="button" class="icon-button" aria-label="上一页"><span aria-hidden="true">←</span></button><span id="page-count" class="small"></span><button id="next-page" type="button" class="icon-button" aria-label="下一页"><span aria-hidden="true">→</span></button></div></div>
+        </div>
+        <div class="selection-bar"><div><span id="selection-count" class="selection-count">尚未选择文件</span><span id="selection-size" class="selection-size">选择后即可开始下载</span></div><button type="button" id="clear-selection" class="text-button" disabled>清空选择</button></div>
+      </section>
+    </div>
+
+    <section id="download-section" class="download-section panel" aria-labelledby="download-heading">
+      <div class="download-top"><div><p class="section-kicker">SAVE YOUR WAY</p><h2 id="download-heading">选择一种带走的方式</h2><p class="muted small">无论哪一种，文件都不经过本站服务器。</p></div><span id="secure-status" class="capability-pill"></span></div>
+      <fieldset id="download-methods" class="download-methods"><legend class="sr-only">下载方式</legend>
+        <label class="method-card"><input type="radio" name="downloadMode" value="zip" checked><span class="method-icon"><svg class="icon"><use href="#i-zip"/></svg></span><span class="method-content"><strong>打包为 ZIP <span class="method-tag">通用</span></strong><span id="zip-description">一个压缩包，保留所有目录结构。</span></span><span class="radio-indicator"></span></label>
+        <label id="directory-method" class="method-card"><input type="radio" name="downloadMode" value="directory"><span class="method-icon"><svg class="icon"><use href="#i-folder"/></svg></span><span class="method-content"><strong>直接存入文件夹 <span class="method-tag">推荐</span></strong><span id="directory-description">选择本地目录，逐个文件直接写入。</span></span><span class="radio-indicator"></span></label>
+        <label class="method-card"><input type="radio" name="downloadMode" value="browser"><span class="method-icon"><svg class="icon"><use href="#i-download"/></svg></span><span class="method-content"><strong>浏览器逐个下载</strong><span>交给浏览器处理；可能需要允许多文件下载。</span></span><span class="radio-indicator"></span></label>
+      </fieldset>
+      <div class="download-action"><div id="mode-note" class="mode-note"><svg class="icon"><use href="#i-info"/></svg><p id="mode-note-text"></p></div><button id="review-download" type="button" class="button primary" disabled><svg class="icon"><use href="#i-download"/></svg><span>确认并下载</span></button></div>
+    </section>
+
+    <section id="transfer-section" class="transfer-section panel" aria-labelledby="transfer-heading" hidden>
+      <div class="transfer-heading"><div><p class="section-kicker">TRANSFER</p><h2 id="transfer-heading">准备下载</h2></div><span id="transfer-badge" class="badge">准备中</span></div><div class="transfer-stats"><strong id="transfer-percent">0%</strong><span id="transfer-count">0 / 0 个文件</span></div><progress id="transfer-progress" max="100" value="0" aria-label="下载进度"></progress><div class="transfer-detail"><p id="transfer-path">准备文件…</p><span id="transfer-bytes"></span></div><p id="transfer-message" class="small muted"></p><div class="transfer-buttons"><button id="pause-transfer" type="button" class="button secondary"><svg class="icon"><use href="#i-pause"/></svg><span>暂停</span></button><button id="cancel-transfer" type="button" class="button subtle">取消任务</button><button id="retry-transfer" type="button" class="button secondary" hidden><svg class="icon"><use href="#i-refresh"/></svg><span>重试失败项</span></button></div><details id="transfer-errors" class="transfer-errors" hidden><summary id="errors-summary">查看未完成项目</summary><ul id="error-list"></ul></details>
+    </section>
+
+    <section id="how-it-works" class="help-section" aria-labelledby="help-heading"><div><p class="section-kicker">GOOD TO KNOW</p><h2 id="help-heading">下载之前，了解这几件事</h2></div><div class="help-grid"><details><summary>为什么连接或下载失败？</summary><p>你的 Alist 必须允许本站来源访问 API；文件直链所在的存储服务也需要允许跨域。HTTPS 页面通常无法连接 HTTP 服务。网络、权限、过期签名链接或防盗链规则也可能阻止下载。本工具不会使用代理绕过这些限制。</p></details><details><summary>哪些浏览器支持直接存文件夹？</summary><p>需要安全环境（HTTPS 或 localhost）和 File System Access API。支持情况以页面检测为准；部分 Chromium 浏览器支持，Firefox、Safari 和部分移动端通常不支持。不可用时仍可尝试 ZIP。目录模式遇到同名文件会自动重命名，不默认覆盖。</p></details><details><summary>大文件与暂停有什么限制？</summary><p>支持保存文件选择器时，ZIP 可直接写入磁盘；否则 ZIP 使用内存打包，限制 256 MiB 和 10,000 个文件。暂停是当前页面内的协作式暂停，不等于断点续传。取消或关闭页面后无法跨会话恢复；重试会从文件开头重新下载。空目录不会单独下载。</p></details><details><summary>我的账号和文件安全吗？</summary><p>本站没有后端，不保存账号、密码或 Token，也没有分析追踪。凭据仅用于当前页面与所填写 Alist 站点通信；文件直接从其存储源获取。断开连接或刷新会清除内存状态。请只连接你信任且有权访问的站点；浏览器自身可能保留输入或下载记录。</p></details></div></section>
+  </main>
+  <footer class="site-footer"><span>alistdownload<span class="brand-dot">.</span> <span class="footer-divider">/</span> 少一点繁琐，多一点自由。</span><span>Browser-only · No proxy · No tracking</span></footer>
+
+  <dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-heading"><div><p class="section-kicker">READY WHEN YOU ARE</p><h2 id="review-title">确认这次下载</h2></div><button type="button" id="close-review" class="icon-button" aria-label="关闭下载确认"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="dialog-intro">只会下载下方确认的已选文件。</p><div class="review-stats"><div><strong id="review-count">0</strong><span>个文件</span></div><div><strong id="review-size">0 B</strong><span>已知总大小</span></div><div><strong id="review-mode">ZIP</strong><span>保存方式</span></div></div><div class="review-origin"><span class="muted">来源</span><strong id="review-origin"></strong></div><ul id="review-file-list" class="review-file-list"></ul><p id="review-more" class="small muted"></p><div class="notice warning review-note"><svg class="icon"><use href="#i-info"/></svg><div id="review-note"></div></div><p id="review-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="cancel-review" class="button subtle">再检查一下</button><button type="button" id="start-download" class="button primary"><svg class="icon"><use href="#i-download"/></svg><span>开始下载</span></button></div></dialog>
+  <div id="live-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <noscript><div class="noscript">需要启用 JavaScript 才能连接 Alist 和下载文件。所有操作均在浏览器中进行。</div></noscript>
+</body>
+</html>
