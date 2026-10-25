@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
@@ -34,10 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p _site/src _site/vendor
-          cp index.html styles.css LICENSE README.md CNAME .nojekyll _site/
-          cp src/app.js src/core.js src/downloads.js _site/src/
-          cp vendor/zip.min.js vendor/zip.LICENSE vendor/SOURCE.json _site/vendor/
+          node scripts/build-site.mjs
           test "$(tr -d '\r\n' < _site/CNAME)" = 'alist-download.unblock.win'
           test -s _site/index.html
           test -s _site/vendor/zip.min.js
